@@ -91,14 +91,12 @@ def crop_diagram_from_pdf(doc, page_num: int, box_2d):
         right = min(w, int((xmax / 1000.0) * w) + pad_x)
         bottom = min(h, int((ymax / 1000.0) * h) + pad_y)
 
-        # Ensure cropped box isn't tiny or full-page
         if (right - left) > 60 and (bottom - top) > 60 and ((right - left) * (bottom - top)) < (w * h * 0.85):
             cropped = img.crop((left, top, right, bottom))
             out = io.BytesIO()
             cropped.save(out, format="PNG", optimize=True)
             return out.getvalue()
 
-    # Fallback: render at moderate resolution if no valid crop box
     pix_fb = page.get_pixmap(matrix=pymupdf.Matrix(1.2, 1.2))
     return pix_fb.tobytes("png")
 
