@@ -26,8 +26,6 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 FAST_MODELS = [
     "gemini-3.8-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
 ]
 
 # Store pending quiz sources per message until count is chosen
@@ -39,6 +37,13 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Bot is running!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return
 
 
 def run_web_server():
@@ -68,9 +73,9 @@ async def generate_json(contents, temperature=0.35):
             )
             return json.loads(res.text)
         except Exception as err:
-            last_error = err
+            last_error = f"[{model_name}] {err}"
             await asyncio.sleep(0.25)
-    raise last_error
+    raise RuntimeError(last_error)
 
 
 def crop_diagram_from_pdf(doc, page_num: int, box_2d):
