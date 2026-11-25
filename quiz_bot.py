@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from google import genai
 from google.genai import types
 from telegram import Update, Poll
@@ -10,6 +12,18 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Render-এর ফ্রি সার্ভার চালু রাখার জন্য ছোট্ট ওয়েব সার্ভার
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    server.serve_forever()
 
 async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
@@ -107,6 +121,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.remove(pdf_path)
 
 def main():
+    threading.Thread(target=run_web_server, daemon=True).start()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.Document.PDF, handle_pdf))
     print("Bot is running...")
