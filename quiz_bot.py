@@ -24,11 +24,10 @@ QUIZ_TOPIC_ID = os.environ.get("QUIZ_TOPIC_ID")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Fast models fallback list (tries first available/working model)
+# Fast & current models
 FAST_MODELS = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
     "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
 ]
 
 # Store pending quiz sources per message until count is chosen
@@ -64,21 +63,26 @@ def is_allowed_topic(message) -> bool:
 async def generate_json(contents, temperature=0.35):
     errors = []
     for model_name in FAST_MODELS:
-        try:
-            res = await asyncio.to_thread(
-                client.models.generate_content,
-                model=model_name,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=temperature,
-                ),
-            )
-            return json.loads(res.text)
-        except Exception as err:
-            errors.append(f"{model_name}: {err}")
-            await asyncio.sleep(0.2)
-    raise RuntimeError(" | ".join(errors))
+        # Retry up to 3 times per model in case of temporary 503 high demand
+        for attempt in range(3):
+            try:
+                res = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=temperature,
+                    ),
+                )
+                return json.loads(res.text)
+            except Exception as err:
+                err_str = str(err)
+                errors.append(f"{model_name} (try {attempt + 1}): {err}")
+                if "404" in err_str or "NOT_FOUND" in err_str:
+                    break
+                await asyncio.sleep(1.0 * (attempt + 1))
+    raise RuntimeError(" | ".join(errors[-4:]))
 
 
 def crop_diagram_from_pdf(doc, page_num: int, box_2d):
