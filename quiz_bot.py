@@ -25,13 +25,14 @@ QUIZ_TOPIC_ID = os.environ.get("QUIZ_TOPIC_ID")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 FAST_MODELS = [
+    "gemini-3.8-flash",
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
 ]
 
-# Store pending quiz sources per user/chat until count is chosen
+# Store pending quiz sources per message until count is chosen
 PENDING_JOBS = {}
+
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -39,15 +40,18 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is running!")
 
+
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
+
 def is_allowed_topic(message) -> bool:
     if not QUIZ_TOPIC_ID:
         return True
     return str(message.message_thread_id) == str(QUIZ_TOPIC_ID).strip()
+
 
 async def generate_json(contents, temperature=0.35):
     last_error = None
@@ -67,6 +71,7 @@ async def generate_json(contents, temperature=0.35):
             last_error = err
             await asyncio.sleep(0.25)
     raise last_error
+
 
 def crop_diagram_from_pdf(doc, page_num: int, box_2d):
     """Crop a specific region [ymin, xmin, ymax, xmax] (0-1000) cleanly with padding."""
@@ -97,6 +102,7 @@ def crop_diagram_from_pdf(doc, page_num: int, box_2d):
     pix_fb = page.get_pixmap(matrix=pymupdf.Matrix(1.2, 1.2))
     return pix_fb.tobytes("png")
 
+
 def build_count_keyboard(job_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -107,11 +113,13 @@ def build_count_keyboard(job_id: str) -> InlineKeyboardMarkup:
         ]
     ])
 
+
 async def get_topic_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message:
         return
     await message.reply_text(f"📌 Topic ID: `{message.message_thread_id}`", parse_mode="Markdown")
+
 
 # Step 1: Receive PDF -> Ask how many questions
 async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -140,6 +148,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
     )
 
+
 # Step 1: Receive Photo -> Ask how many questions
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
@@ -167,6 +176,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
     )
 
+
 # Step 1: Receive Text -> Ask how many questions
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
@@ -192,6 +202,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=build_count_keyboard(job_id),
         parse_mode="Markdown",
     )
+
 
 # Step 2: Handle Button Click -> Generate & Send Fast
 async def handle_count_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -315,6 +326,7 @@ async def handle_count_choice(update: Update, context: ContextTypes.DEFAULT_TYPE
         if doc:
             doc.close()
 
+
 def main():
     threading.Thread(target=run_web_server, daemon=True).start()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -325,6 +337,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_count_choice, pattern=r"^qcount:"))
     print("Bot is running...")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
