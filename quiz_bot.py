@@ -13,7 +13,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Render-এর ফ্রি সার্ভার চালু রাখার জন্য ছোট্ট ওয়েব সার্ভার
+# Health check web server for Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -39,7 +39,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await context.bot.send_message(
         chat_id=chat_id,
         message_thread_id=topic_id,
-        text="⏳ PDF পড়া হচ্ছে, একটু অপেক্ষা করো... কুইজ তৈরি হচ্ছে!"
+        text="⏳ Reading PDF, please wait... Generating quiz!"
     )
 
     file = await context.bot.get_file(message.document.file_id)
@@ -52,11 +52,12 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         prompt = """
         Generate 10 multiple-choice quiz questions from this PDF.
+        IMPORTANT: Write ALL questions, options, and explanations strictly in English, even if the PDF contains Bengali or any other language.
         Return ONLY a JSON array of objects with these exact keys:
-        - "question": string (max 250 characters)
-        - "options": array of 4 strings (each max 90 characters)
+        - "question": string (in English, max 250 characters)
+        - "options": array of 4 strings (in English, each max 90 characters)
         - "correct_id": integer (0 to 3, index of the correct option)
-        - "explanation": string (short explanation, max 180 characters)
+        - "explanation": string (short explanation in English, max 180 characters)
         """
 
         models_to_try = [
@@ -94,7 +95,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text=f"✅ {len(questions)}টি কুইজ তৈরি হয়ে গেছে! নিচে পরীক্ষা শুরু হচ্ছে:"
+            text=f"✅ {len(questions)} quiz questions generated! Starting the quiz below:"
         )
 
         for i, q in enumerate(questions, 1):
@@ -114,7 +115,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             message_thread_id=topic_id,
-            text=f"❌ এরর হয়েছে: {e}"
+            text=f"❌ An error occurred: {e}"
         )
     finally:
         if os.path.exists(pdf_path):
