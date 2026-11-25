@@ -24,7 +24,10 @@ QUIZ_TOPIC_ID = os.environ.get("QUIZ_TOPIC_ID")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# Fast models fallback list (tries first available/working model)
 FAST_MODELS = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "gemini-3.8-flash",
 ]
 
@@ -59,7 +62,7 @@ def is_allowed_topic(message) -> bool:
 
 
 async def generate_json(contents, temperature=0.35):
-    last_error = None
+    errors = []
     for model_name in FAST_MODELS:
         try:
             res = await asyncio.to_thread(
@@ -73,9 +76,9 @@ async def generate_json(contents, temperature=0.35):
             )
             return json.loads(res.text)
         except Exception as err:
-            last_error = f"[{model_name}] {err}"
-            await asyncio.sleep(0.25)
-    raise RuntimeError(last_error)
+            errors.append(f"{model_name}: {err}")
+            await asyncio.sleep(0.2)
+    raise RuntimeError(" | ".join(errors))
 
 
 def crop_diagram_from_pdf(doc, page_num: int, box_2d):
@@ -309,7 +312,7 @@ async def handle_count_choice(update: Update, context: ContextTypes.DEFAULT_TYPE
                         photo=cropped_bytes,
                         caption=f"🔍 Q{i} Target",
                     )
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.15)
 
             await context.bot.send_poll(
                 chat_id=chat_id,
@@ -321,7 +324,7 @@ async def handle_count_choice(update: Update, context: ContextTypes.DEFAULT_TYPE
                 explanation=q.get("explanation", "")[:200],
                 is_anonymous=False,
             )
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.2)
 
     except Exception as err:
         await query.edit_message_text(f"❌ Error: {err}")
